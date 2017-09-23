@@ -3,6 +3,7 @@ package main
 import (
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 
 	"github.com/BurntSushi/toml"
@@ -41,7 +42,11 @@ func (c *Config) BindAddress() string {
 	return ":" + strconv.Itoa(c.Port)
 }
 
-func loadToml(file string) (*Config, error) {
+func (c *Config) JsonFile(code string) string {
+	return filepath.Join(c.JsonDir, code+".json")
+}
+
+func LoadToml(file string) (*Config, error) {
 	var conf Config
 	if _, err := toml.DecodeFile(file, &conf); err != nil {
 		return &conf, err

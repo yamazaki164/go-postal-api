@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"path/filepath"
 
 	"github.com/labstack/echo"
+	"github.com/labstack/echo/middleware"
 	"github.com/yamazaki164/go-postal/postal"
 )
 
@@ -17,31 +17,41 @@ var (
 	config *Config
 )
 
+type Item map[string]interface{}
+
 func endpointAction(c echo.Context) error {
 	postalCode := c.QueryParam("code")
 	if len(postalCode) < 3 {
-		return c.JSON(http.StatusBadRequest, nil)
+		return c.JSON(http.StatusBadRequest, Item{
+			"status": http.StatusBadRequest,
+		})
 	}
 
-	postalCodeShort := postalCode[0:3]
-
-	file := filepath.Join(config.JsonDir, postalCodeShort+".json")
-	b, e := ioutil.ReadFile(file)
+	data, e := ioutil.ReadFile(config.JsonFile(postalCode[0:3]))
 	if e != nil {
-		return c.JSON(http.StatusBadRequest, nil)
+		return c.JSON(http.StatusBadRequest, Item{
+			"status": http.StatusBadRequest,
+		})
 	}
 
 	var p postal.AreaPostal
-	if e := json.Unmarshal(b, &p); e != nil {
-		return c.JSON(http.StatusBadRequest, nil)
+	if e := json.Unmarshal(data, &p); e != nil {
+		return c.JSON(http.StatusBadRequest, Item{
+			"status": http.StatusBadRequest,
+		})
 	}
 
-	rec, err := p[postalCode]
+	result, err := p[postalCode]
 	if !err {
-		return c.JSON(http.StatusBadRequest, nil)
+		return c.JSON(http.StatusBadRequest, Item{
+			"status": http.StatusBadRequest,
+		})
 	}
 
-	return c.JSON(http.StatusOK, rec)
+	return c.JSON(http.StatusOK, Item{
+		"status": http.StatusOK,
+		"result": result,
+	})
 }
 
 func main() {
@@ -49,7 +59,7 @@ func main() {
 	flag.Parse()
 
 	var err error
-	config, err = loadToml(*configFileOpt)
+	config, err = LoadToml(*configFileOpt)
 	if err != nil {
 		fmt.Println(config)
 		panic(err)
@@ -60,6 +70,9 @@ func main() {
 	}
 
 	e := echo.New()
+	e.Use(middleware.Gzip())
+	e.Use(middleware.Secure())
+	e.Use(middleware.Recover())
 	e.GET(config.Endpoint, endpointAction)
 	e.Logger.Fatal(e.Start(config.BindAddress()))
 }
